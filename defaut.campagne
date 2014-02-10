@@ -1,0 +1,63 @@
+#-------------------------------------------------------------------
+#  Configuration générale de la simulation
+#-------------------------------------------------------------------
+# Simulateur à utiliser (QNAP : obsolète, NDES)
+SIMULATEUR=NDES
+
+# Répertoire de base des simulations
+SIMUBASEDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/
+LOG=$SIMUBASEDIR/HistoriqueDesSimulations.log
+
+#--------------------------------------------------------------------
+#   Valeur par défaut des parametres (permet d'alleger les config et
+# d'assurer une certaine compatibilité ascendante, ...)
+#--------------------------------------------------------------------
+# Quel algorihtme ? 0 : KnapSack, 1 : PropUtil, 2 : util, 3 : ks exhaustif)
+ALGO=0
+
+#Valeures de la charge 
+CHARGES="0.8"
+
+#Types de QoS pour les files 1/2/3
+#(type 1 : log, 2 : lin, 3 : exp, 4 : exn, 5 : pq, 6 : bit, 7 : BB, 8 : LRPT)
+QoSSet=(2 2 2)
+
+#Poids de la QoS
+WghtQoS=(1 1 1)
+
+#Paramètre K de la QoS
+KSet=(1 1 1)
+
+#Les scenarios a simuler (0 : equil, 1 : clear, 2 : inverse, 3 : un MODCOD)
+SCENARIOS="3"
+
+DECLASSEMENT="FALSE"
+
+# Durée en secondes
+DUREE=100
+
+# Répertoire dans lequel placer les résultats
+RESDIR=.
+
+# Faut-il sauvegarder les debits (parfois lourd) ?
+LOG_BW=FALSE
+
+# Faut-il sauvegarder les pertes ?
+LOG_DROP=FALSE
+
+# Capacite de chaque file, en secondes (0 = illimité)
+FILE_DURATION=0.0
+
+#-------------------------------------------------------------------
+# Configuration pour une simulation avec NDES
+#-------------------------------------------------------------------
+NDES=$HOME/bin/knapsack
+
+#-------------------------------------------------------------------
+# Configuration pour une simulation par QNAP
+#-------------------------------------------------------------------
+# Chemin de QNAP
+QNAP="/usr/local/simulog/modline/packages.toolbox/qnap2.tool/libexec/Solaris/QNAP2V9"
+# Simulateur QNAP
+SOURCE=$HOME/PROGRAMMATION/QNAP/DeSa-Robert/Traitement/GSE-Scheduler-simu-1.5.qnp
+
