@@ -7,6 +7,7 @@
 #--------------------------------------------------------------------
 #
 #   2011-04-24 : Possibilite d'utiliser NDES à la place de QNAP
+#   2014-02-10 : Gestion des traitements par lot
 #--------------------------------------------------------------------
 CONFIGDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/ConfigDir/
 
@@ -96,6 +97,7 @@ $DUREE
 $charge
 $scenario
 $algo
+$EPOCH_DURATION
 $typeqos1
 $typeqos2
 $typeqos3

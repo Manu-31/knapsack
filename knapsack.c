@@ -45,9 +45,11 @@
                         // que possible mais permet la compatibilité
                         // ascendante avec mes scripts de lancement
                         // de campagne).
-			*/
 #define KS_VERSION  9   // 2014-01-30 Ajout d'un traitement par lot
-
+#define KS_VERSION 10   // 2014-02-10 Ajout dalgorithme par lot
+			// (ALGO_BATCH_UTIL)
+			*/
+#define KS_VERSION 11   // 2104-02-12 Ajout de variantes sur le batch
 /*======================================================================*/
 
 #include <sys/types.h>
@@ -60,6 +62,7 @@
 #include <string.h>
 #include <time.h>      // time
 #include <unistd.h>    // close
+#include <math.h>      // ceil
 
 #include <event.h>
 #include <file_pdu.h>
@@ -68,6 +71,7 @@
 #include <date-generator.h>
 #include <probe.h>
 #include <schedUtility.h>
+#include <schedACMBatch.h>
 #include <sched_ks.h>
 #include <dvb-s2-ll.h>
 
@@ -391,10 +395,13 @@ int main() {
 
    // Quel algorithme ?
 #define ALGO_KS           0
-#define ALGO_UTILITY_PROP 1
+#define ALGO_UTILITY_PROP 1    // Rendu caduque par le 4 avec une durée d'époque nulle
 #define ALGO_UTILITY      2
 #define ALGO_KS_EXHAUSTIF 3
 #define ALGO_UTIL_PROP_BATCH 4
+#define ALGO_BATCH_UTIL      5
+#define ALGO_BATCH_LENGTH    6
+#define ALGO_BATCH_UTIL_LENGTH      7
 
    int algorithme ;
 
@@ -425,6 +432,12 @@ int main() {
    double volumeTotal;
 
    time_t dateDebut, dateFin;
+
+   // Durée d'une époque en cas d'ordonnanceur par lot.
+   double epochMinDuration = 0.016;
+   double minFrameDuration = 0.0;
+   int sequenceMaxLength = 1;
+   struct probe_t * epochDurationProbe;
 
 /*----------------------------------------------------------------------*/
 /*   Saisie des paramètres.                                             */
@@ -465,9 +478,13 @@ int main() {
       fflush(stdout);
       scanf("%d", &scenario);
 
-   printf("Algo (%d=KS, %d=propUtil, %d=util, %d=ks exhau) = ", ALGO_KS, ALGO_UTILITY_PROP, ALGO_UTILITY, ALGO_KS_EXHAUSTIF);
+      printf("Algo (%d=KS, %d=propUtil, %d=util, %d=ks exhau, %d=batch util) = ", ALGO_KS, ALGO_UTILITY_PROP, ALGO_UTILITY, ALGO_KS_EXHAUSTIF, ALGO_BATCH_UTIL);
    fflush(stdout);
    scanf("%d", &algorithme);
+   printf("Durée d'époque (si par lot, 0.0 sinon) = ");
+   fflush(stdout);
+   scanf("%lf", &epochMinDuration);
+
 
    for (q = 0; q < NB_QOS_LEVEL; q++) {
      printf("File %d : quelle QoS ? (1=log/2=lin/3=exp/4=exn/5=PQ/6=BT/7=BB) : ", q);
@@ -603,6 +620,13 @@ int main() {
       debitBinaire[mc] = (double)DVBS2ll_bbframePayloadBitSize(dvbs2ll, mc)/DVBS2ll_bbframeTransmissionTime(dvbs2ll, mc);
    };
 
+   // Pour les ordonnanceurs par lot
+   minFrameDuration = DVBS2ll_bbframeTransmissionTime(dvbs2ll, 0);
+   for (m = 1; m < DVBS2ll_nbModcod(dvbs2ll); m++) {
+      minFrameDuration =  (DVBS2ll_bbframeTransmissionTime(dvbs2ll, m) < sequenceMaxLength)?DVBS2ll_bbframeTransmissionTime(dvbs2ll, m):sequenceMaxLength;
+   }
+   sequenceMaxLength = (epochMinDuration/minFrameDuration > 1.0) ? (int)ceil(epochMinDuration/minFrameDuration):1;
+
    /* Création de l'ordonnanceur */
    switch (algorithme) {
       case ALGO_KS :
@@ -618,8 +642,28 @@ int main() {
          schedks = schedUtilityProp_create(dvbs2ll, NB_QOS_LEVEL, declassement);
       break;
       case ALGO_UTIL_PROP_BATCH :
-	schedks = schedUtilityPropBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, 10);
-	schedACM_setEpochMinDuration(schedks, 0.016);
+        schedks = schedUtilityPropBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_UTIL :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeUtil);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_LENGTH :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeLength);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_UTIL_LENGTH :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeUtilThenLength);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
       break;
       default :
          printf("Algo %d inconnu !\n", algorithme);
@@ -811,6 +855,7 @@ int main() {
    fprintf(fichierLog, "Charge globale      :   %5.2f\n", chargeEntree);
    fprintf(fichierLog, "Duree de simulation : %7.2f secondes\n", dureeSimulation);
    fprintf(fichierLog, "Declassement        : %s\n", declassement?"AVEC":"SANS");
+   fprintf(fichierLog, "Duree d'epoque      : %f (%d frame min)\n", epochMinDuration, sequenceMaxLength);
    fprintf(fichierLog, "Fichier de sortie   : %s\n", filename);
    fprintf(fichierLog, "\n           Caracteristiques des MODCODs\n");
    fprintf(fichierLog, "---------+-----------+------------+-------------+\n");
@@ -886,6 +931,8 @@ int main() {
       fprintf(fichierLog, " - Nombre de BBFRAME produites : %ld ", probe_nbSamples(sip));
       if (probe_nbSamples(sip)) fprintf(fichierLog, " (iap = %f)", probe_IAMean(sip));
       fprintf(fichierLog, "\n - Nombre de DUMMY produites : %ld\n", probe_nbSamples(df));
+      fprintf(fichierLog, " - Durée moyenne d'une époque  : %lf\n", probe_mean(epochDurationProbe));
+      fprintf(fichierLog, " - Nombre d'epoques            : %d (%d famines)\n", schedACM_getNbEpoch(schedks), schedACM_getNbEpochStarvation(schedks));
       fprintf(fichierLog, " - Nombre moyen de cas testes : %f\n", probe_mean(nbCas));
       fprintf(fichierLog, " - Duree en temps reel : %ld\n", dateFin - dateDebut);
       fprintf(fichierLog, "   m/q   |  packets  | BBFRAMEs |   size   |    ia    |    tms     | backlog  |  rempl.  |\n");

@@ -29,6 +29,7 @@ knapsack-meteo-ref : knapsack.c $(LIB_DIR)/libndes.a
 
 install : $(KNAPSACK)
 	cp $(KNAPSACK) LancerCampagne.sh $(BINDIR)
+	@mkdir $(CONFIGDIR) || true 
 	cp $(CONFIG) $(CONFIGDIR)
 
 clean :

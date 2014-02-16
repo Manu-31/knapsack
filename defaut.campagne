@@ -12,10 +12,18 @@ LOG=$SIMUBASEDIR/HistoriqueDesSimulations.log
 #   Valeur par défaut des parametres (permet d'alleger les config et
 # d'assurer une certaine compatibilité ascendante, ...)
 #--------------------------------------------------------------------
-# Quel algorihtme ? 0 : KnapSack, 1 : PropUtil, 2 : util, 3 : ks exhaustif)
+# Quel algorithme ? 
+# 0 : KnapSack
+# 1 : PropUtil
+# 2 : util
+# 3 : ks exhaustif
+# 4 : comme le 1 mais par lot
 ALGO=0
 
-#Valeures de la charge 
+# Traitement par lots
+EPOCH_DURATION=0.008
+
+# Valeurs de la charge 
 CHARGES="0.8"
 
 #Types de QoS pour les files 1/2/3
