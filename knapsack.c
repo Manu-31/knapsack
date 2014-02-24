@@ -402,6 +402,9 @@ int main() {
 #define ALGO_BATCH_UTIL      5
 #define ALGO_BATCH_LENGTH    6
 #define ALGO_BATCH_UTIL_LENGTH      7
+#define ALGO_BATCH_DURATION         8
+#define ALGO_BATCH_UTIL_DURATION    9
+#define ALGO_BATCH_DURATION_LENGTH         10
 
    int algorithme ;
 
@@ -437,7 +440,7 @@ int main() {
    double epochMinDuration = 0.016;
    double minFrameDuration = 0.0;
    int sequenceMaxLength = 1;
-   struct probe_t * epochDurationProbe;
+   struct probe_t * epochDurationProbe = NULL;
 
 /*----------------------------------------------------------------------*/
 /*   Saisie des paramètres.                                             */
@@ -635,11 +638,11 @@ int main() {
       case ALGO_KS_EXHAUSTIF :
 	schedks = sched_kse_create(dvbs2ll, NB_QOS_LEVEL, declassement, 1);
       break;
-      case ALGO_UTILITY :
-         schedks = schedUtility_create(dvbs2ll, NB_QOS_LEVEL, declassement);
-      break;
-      case ALGO_UTILITY_PROP :
+      case ALGO_UTILITY_PROP :    //1
          schedks = schedUtilityProp_create(dvbs2ll, NB_QOS_LEVEL, declassement);
+      break;
+      case ALGO_UTILITY :        // 2
+         schedks = schedUtility_create(dvbs2ll, NB_QOS_LEVEL, declassement);
       break;
       case ALGO_UTIL_PROP_BATCH :
         schedks = schedUtilityPropBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength);
@@ -661,6 +664,24 @@ int main() {
       break;
       case ALGO_BATCH_UTIL_LENGTH :
         schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeUtilThenLength);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_DURATION :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeDuration);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_UTIL_DURATION :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeUtilThenDuration);
+	schedACM_setEpochMinDuration(schedks, epochMinDuration);
+        epochDurationProbe = probe_createMean();
+        schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
+      break;
+      case ALGO_BATCH_DURATION_LENGTH :
+        schedks = schedACMBatch_create(dvbs2ll, NB_QOS_LEVEL, declassement, sequenceMaxLength, schedBatchModeDurationThenLength);
 	schedACM_setEpochMinDuration(schedks, epochMinDuration);
         epochDurationProbe = probe_createMean();
         schedACM_addEpochTimeDurationProbe(schedks, epochDurationProbe);
@@ -931,8 +952,10 @@ int main() {
       fprintf(fichierLog, " - Nombre de BBFRAME produites : %ld ", probe_nbSamples(sip));
       if (probe_nbSamples(sip)) fprintf(fichierLog, " (iap = %f)", probe_IAMean(sip));
       fprintf(fichierLog, "\n - Nombre de DUMMY produites : %ld\n", probe_nbSamples(df));
-      fprintf(fichierLog, " - Durée moyenne d'une époque  : %lf\n", probe_mean(epochDurationProbe));
-      fprintf(fichierLog, " - Nombre d'epoques            : %d (%d famines)\n", schedACM_getNbEpoch(schedks), schedACM_getNbEpochStarvation(schedks));
+      if (epochDurationProbe != NULL) {
+         fprintf(fichierLog, " - Durée moyenne d'une époque  : %lf\n", probe_mean(epochDurationProbe));
+         fprintf(fichierLog, " - Nombre d'epoques            : %d (%d famines)\n", schedACM_getNbEpoch(schedks), schedACM_getNbEpochStarvation(schedks));
+      }
       fprintf(fichierLog, " - Nombre moyen de cas testes : %f\n", probe_mean(nbCas));
       fprintf(fichierLog, " - Duree en temps reel : %ld\n", dateFin - dateDebut);
       fprintf(fichierLog, "   m/q   |  packets  | BBFRAMEs |   size   |    ia    |    tms     | backlog  |  rempl.  |\n");
