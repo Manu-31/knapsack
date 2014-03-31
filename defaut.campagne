@@ -21,7 +21,7 @@ LOG=$SIMUBASEDIR/HistoriqueDesSimulations.log
 ALGO=0
 
 # Traitement par lots
-EPOCH_DURATION=0.008
+EPOCH_DURATION=0.016
 
 # Valeurs de la charge 
 CHARGES="0.8"
