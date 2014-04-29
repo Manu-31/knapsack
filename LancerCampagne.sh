@@ -8,6 +8,7 @@
 #
 #   2011-04-24 : Possibilite d'utiliser NDES à la place de QNAP
 #   2014-02-10 : Gestion des traitements par lot
+#   2014-04-28 : Début d'utilisation de fichiers de configuration
 #--------------------------------------------------------------------
 CONFIGDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/ConfigDir/
 
@@ -15,16 +16,32 @@ CONFIGDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/ConfigDir/
 #   Chargement des paramètres par défaut
 #--------------------------------------------------------------------
 
-. $CONFIGDIR/defaut.campagne
+echo Reading default parameters
+. $CONFIGDIR/campagne.default
 
 #--------------------------------------------------------------------
 #   Chargement des paramètres de la campagne
 #--------------------------------------------------------------------
-. $1
+if [ -n "$1" -a -f "$1" ] ; then 
+   echo Reading specific parameters
+   . $1
+   CAMPAIGN_NAME=`basename $1`
+else 
+   echo No config file 
+   CAMPAIGN_NAME=default
+fi
+
+#--------------------------------------------------------------------
+#   Finalisation des paramètres
+#--------------------------------------------------------------------
+echo Building simulator parameters
+. $CONFIGDIR/ConfigureCampaign
+
+echo Running simulations
 
 touch  ${LOG}
 echo "---------------------------------------------------------------------" >> ${LOG}
-echo ">>>> " `hostname` -- `date` : debut de `basename $1` >> ${LOG}
+echo ">>>> " `hostname` -- `date` : debut de $CAMPAIGN_NAME >> ${LOG}
 echo "      (dans " `pwd` ")">> ${LOG}
 
 NB_SIMU=0
@@ -62,6 +79,10 @@ do
                   echo "         " Declassement : $declassement
                   filename=${RESDIR}/sc${scenario}-ch${charge}-alg${algo}-qos${typeqos1}${typeqos2}${typeqos3}-w${wghtqos1},${wghtqos2},${wghtqos3}-k${k1},${k2},${k3}-dc${declassement}
                   echo "**** Fichier de sortie : " ${filename}
+		  MC1=${MODCOD[0]}
+		  MC2=${MODCOD[1]}
+		  MC3=${MODCOD[2]}
+		  MC4=${MODCOD[3]}
                   if [ $SIMULATEUR = QNAP ]
                   then
                      \rm -f ${filename}.log
@@ -94,6 +115,10 @@ EOF
                   else
                      cat <<EOF_NDES |$NDES 
 $DUREE
+$MC1
+$MC2
+$MC3
+$MC4
 $charge
 $scenario
 $algo
@@ -125,6 +150,6 @@ done
 done
 
 
-echo "<<<< "  `hostname` --  `date` : FIN de `basename $1` "(" ${NB_SIMU} " simu)" >> ${LOG}
+echo "<<<< "  `hostname` --  `date` : FIN de $CAMPAIGN_NAME "(" ${NB_SIMU} " simu)" >> ${LOG}
 echo "---------------------------------------------------------------------" >> ${LOG}
 

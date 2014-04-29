@@ -1,0 +1,34 @@
+# Definition des MODCODs à utiliser.
+#
+# Ils doivent être donnés sous forme de liste M/C comme ci-dessous
+# Les valeurs possibles pour M sont les suivantes
+#
+#define  C14SIZE  16008
+#define  C13SIZE  21408
+#define  C25SIZE  25728
+#define  C12SIZE  32208
+#define  C35SIZE  38688
+#define  C23SIZE  43040
+#define  C34SIZE  48408
+#define  C45SIZE  51648
+#define  C56SIZE  53840
+#define  C89SIZE  57472
+#define  C910SIZE 58192
+#
+# Les valeurs possibles pour la modulation sont les suivantes
+#
+#define   MQPSK    2
+#define   M8PSK    3
+#define   M16APSK  4
+#define   M32APSK  5
+#
+# Voici un exemple simple à 4 MODCODs
+
+
+MODCOD=( \
+   MQPSK/C23SIZE   \
+   M8PSK/C23SIZE   \
+   M16APSK/C34SIZE \
+   M16APSK/C56SIZE \
+)
+

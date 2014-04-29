@@ -1,12 +1,13 @@
 #-------------------------------------------------------------------
 #  Configuration générale de la simulation
 #-------------------------------------------------------------------
-# Simulateur à utiliser (QNAP : obsolète, NDES)
-SIMULATEUR=NDES
 
 # Répertoire de base des simulations
 SIMUBASEDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/
+CONFIGDIR=${SIMUBASEDIR}/ConfigDir
 LOG=$SIMUBASEDIR/HistoriqueDesSimulations.log
+
+MODCOD_FILE=${CONFIGDIR}/modcods.default
 
 #--------------------------------------------------------------------
 #   Valeur par défaut des parametres (permet d'alleger les config et
@@ -55,17 +56,4 @@ LOG_DROP=FALSE
 
 # Capacite de chaque file, en secondes (0 = illimité)
 FILE_DURATION=0.0
-
-#-------------------------------------------------------------------
-# Configuration pour une simulation avec NDES
-#-------------------------------------------------------------------
-NDES=$HOME/bin/knapsack
-
-#-------------------------------------------------------------------
-# Configuration pour une simulation par QNAP
-#-------------------------------------------------------------------
-# Chemin de QNAP
-QNAP="/usr/local/simulog/modline/packages.toolbox/qnap2.tool/libexec/Solaris/QNAP2V9"
-# Simulateur QNAP
-SOURCE=$HOME/PROGRAMMATION/QNAP/DeSa-Robert/Traitement/GSE-Scheduler-simu-1.5.qnp
 

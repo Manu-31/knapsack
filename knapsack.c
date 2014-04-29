@@ -48,8 +48,9 @@
 #define KS_VERSION  9   // 2014-01-30 Ajout d'un traitement par lot
 #define KS_VERSION 10   // 2014-02-10 Ajout dalgorithme par lot
 			// (ALGO_BATCH_UTIL)
+#define KS_VERSION 11   // 2014-02-12 Ajout de variantes sur le batch
 			*/
-#define KS_VERSION 11   // 2104-02-12 Ajout de variantes sur le batch
+#define KS_VERSION 12   // 2014-03-39 Lecture de plus de paramêtres
 /*======================================================================*/
 
 #include <sys/types.h>
@@ -226,6 +227,71 @@ void scheduleChangementComportement(double date, struct dateGenerator_t * dateGe
    event_add(changementComportement, (void *)ce, date);
 }
 
+/************************************************************************
+          FONCTIONS DE LECTURE
+ ************************************************************************/
+void lireMODCODFromFILE(FILE * f)
+{
+   int mc;
+   char line[32],*  mod, * cod;
+
+   for (mc = 0 ; mc < NB_MODCOD ; mc ++) {
+     fscanf(f, "%s\n",line);
+     mod = strtok(line, "/"); 
+     cod = strtok(NULL, "/"); 
+
+     if (strcmp(cod, C14SIZE_str) == 0) {
+        chargeUtileMC[mc] = C14SIZE;
+     } else if (strcmp(cod, C13SIZE_str) == 0) {
+        chargeUtileMC[mc] = C13SIZE;
+     } else if (strcmp(cod, C25SIZE_str) == 0) {
+        chargeUtileMC[mc] = C25SIZE;
+     } else if (strcmp(cod, C12SIZE_str) == 0) {
+        chargeUtileMC[mc] = C12SIZE;
+     } else if (strcmp(cod, C35SIZE_str) == 0) {
+        chargeUtileMC[mc] = C35SIZE;
+     } else if (strcmp(cod, C23SIZE_str) == 0) {
+        chargeUtileMC[mc] = C23SIZE;
+     } else if (strcmp(cod, C34SIZE_str) == 0) {
+        chargeUtileMC[mc] = C34SIZE;
+     } else if (strcmp(cod, C45SIZE_str) == 0) {
+        chargeUtileMC[mc] = C45SIZE;
+     } else if (strcmp(cod, C56SIZE_str) == 0) {
+        chargeUtileMC[mc] = C56SIZE;
+     } else if (strcmp(cod, C89SIZE_str) == 0) {
+        chargeUtileMC[mc] = C89SIZE;
+     } else if (strcmp(cod, C910SIZE_str) == 0) {
+        chargeUtileMC[mc] = C910SIZE;
+     } else {
+        printf("Codage '%s' inconnu !\n", cod);
+        exit(1);
+     }
+
+      if (strcmp(mod, MQPSK_str) == 0) {
+         valenceMC[mc] = MQPSK;
+      } else if (strcmp(mod, M8PSK_str) == 0) {
+         valenceMC[mc] = M8PSK;
+      } else if (strcmp(mod, M16APSK_str) == 0) {
+         valenceMC[mc] = M16APSK;
+      } else if (strcmp(mod, M32APSK_str) == 0) {
+         valenceMC[mc] = M32APSK;
+      } else {
+        printf("Modulation '%s' inconnue !\n", mod);
+        exit(1);
+      }
+   }
+}
+
+void lireParametres()
+{
+   FILE * sc;
+
+   sc = fopen("scenario", "r");
+
+   lireMODCODFromFILE(sc);
+}
+
+/************************************************************************/
 /************************************************************************/
 
 /*----------------------------------------------------------------------*/
@@ -466,6 +532,8 @@ int main() {
 /*   Soucis pour le moment : comment éviter de se retrouver avec une    */
 /*  kyrielle de fichiers ? Des fichiers par défaut ?                    */
 /*----------------------------------------------------------------------*/
+     lireParametres();
+
      printf("Are you kidding me ?!\n");
      exit(1);
 
@@ -473,6 +541,8 @@ int main() {
 /*----------------------------------------------------------------------*/
 /* Ancien mode de saisie : tout au clavier                              */
 /*----------------------------------------------------------------------*/
+      lireMODCODFromFILE(stdin);
+
       printf("Charge en entree       = ");
       fflush(stdout);
       scanf("%lf", &chargeEntree);

@@ -12,7 +12,7 @@ BINDIR=$(HOME)/bin
 CONFIGDIR=$(HOME)/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/ConfigDir/
 
 KNAPSACK = knapsack knapsack-meteo knapsack-meteo-ref
-CONFIG	 = defaut.campagne
+CONFIG_SRC = config
 
 .PHONY: clean 
 
@@ -30,7 +30,7 @@ knapsack-meteo-ref : knapsack.c $(LIB_DIR)/libndes.a
 install : $(KNAPSACK)
 	cp $(KNAPSACK) LancerCampagne.sh $(BINDIR)
 	@mkdir $(CONFIGDIR) || true 
-	cp $(CONFIG) $(CONFIGDIR)
+	cp $(CONFIG_SRC)/* $(CONFIGDIR)
 
 clean :
 	\rm -f *~ $(OBJ_FILES) $(KNAPSACK)

@@ -1,0 +1,27 @@
+#-------------------------------------------------------------------
+# Chargement des fichiers de configuration par défaut
+#-------------------------------------------------------------------
+if [ -f $MODCOD_FILE ] ; then
+   echo Config des MODCODs depuis $MODCOD_FILE
+   . $MODCOD_FILE
+else
+   echo ATTENTION, pas de MODCOD configure
+   exit
+fi
+
+# Simulateur à utiliser (QNAP : obsolète, NDES)
+SIMULATEUR=NDES
+
+#-------------------------------------------------------------------
+# Configuration pour une simulation avec NDES
+#-------------------------------------------------------------------
+NDES=$HOME/bin/knapsack
+
+#-------------------------------------------------------------------
+# Configuration pour une simulation par QNAP
+#-------------------------------------------------------------------
+# Chemin de QNAP
+QNAP="/usr/local/simulog/modline/packages.toolbox/qnap2.tool/libexec/Solaris/QNAP2V9"
+# Simulateur QNAP
+SOURCE=$HOME/PROGRAMMATION/QNAP/DeSa-Robert/Traitement/GSE-Scheduler-simu-1.5.qnp
+
