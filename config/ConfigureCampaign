@@ -1,21 +1,18 @@
-#-------------------------------------------------------------------
-# Chargement des fichiers de configuration par défaut
-#-------------------------------------------------------------------
-if [ -f $MODCOD_FILE ] ; then
-   echo Config des MODCODs depuis $MODCOD_FILE
-   . $MODCOD_FILE
-else
-   echo ATTENTION, pas de MODCOD configure
-   exit
-fi
-
-# Simulateur à utiliser (QNAP : obsolète, NDES)
-SIMULATEUR=NDES
+echo Fichier $NOMBRE_SOURCES_FILE
 
 #-------------------------------------------------------------------
-# Configuration pour une simulation avec NDES
+# Chargement des fichiers de configuration
 #-------------------------------------------------------------------
-NDES=$HOME/bin/knapsack
+for Config in $MODCOD_FILE $NOMBRE_SOURCES_FILE
+do
+   if [ -f $Config ] ; then
+      echo Configuration depuis $Config
+      . $Config
+   else
+      echo ATTENTION, fichier de configuration introuvable
+      exit
+   fi
+done
 
 #-------------------------------------------------------------------
 # Configuration pour une simulation par QNAP

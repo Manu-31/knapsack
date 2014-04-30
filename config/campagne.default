@@ -1,6 +1,9 @@
 #-------------------------------------------------------------------
 #  Configuration générale de la simulation
 #-------------------------------------------------------------------
+# Simulateur à utiliser (QNAP : obsolète, NDES)
+SIMULATEUR=NDES
+NDES=$HOME/bin/knapsack
 
 # Répertoire de base des simulations
 SIMUBASEDIR=$HOME/PROGRAMMATION/C/GSE-SCHED-CAMPAIGNS/
@@ -8,6 +11,8 @@ CONFIGDIR=${SIMUBASEDIR}/ConfigDir
 LOG=$SIMUBASEDIR/HistoriqueDesSimulations.log
 
 MODCOD_FILE=${CONFIGDIR}/modcods.default
+NOMBRE_SOURCES_FILE=${CONFIGDIR}/nombresources.default
+echo Fichier $NOMBRE_SOURCES_FILE
 
 #--------------------------------------------------------------------
 #   Valeur par défaut des parametres (permet d'alleger les config et

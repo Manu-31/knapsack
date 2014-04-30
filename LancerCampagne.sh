@@ -113,7 +113,7 @@ $k3
 EOF
                   mv $tmp_filename ${filename}.log
                   else
-                     cat <<EOF_NDES |$NDES 
+                     cat <<EOF_NDES > ${filename}.param
 $DUREE
 $MC1
 $MC2
@@ -138,7 +138,19 @@ $LOG_BW
 $LOG_DROP
 $FILE_DURATION
 EOF_NDES
-
+                     # La découpe ci dessous en MC/QO/NbSrc n'est pas vraiment nécessaire !           
+                     (for n in $(seq 0 $((${#NOMBRE_SOURCES[@]} / 3 - 1)))
+                     do
+                        m=$((3 * $n))
+                        MC=${NOMBRE_SOURCES[$m]}
+                        QO=${NOMBRE_SOURCES[$(($m + 1))]}
+                        nbSrc=${NOMBRE_SOURCES[$(($m + 2))]}
+                        echo $MC
+                        echo $QO 
+                        echo $nbSrc
+                     done
+                     echo -1) >> ${filename}.param
+	             cat ${filename}.param  |$NDES
                   fi
                   NB_SIMU=`expr ${NB_SIMU} + 1`
                done

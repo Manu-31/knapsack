@@ -49,8 +49,9 @@
 #define KS_VERSION 10   // 2014-02-10 Ajout dalgorithme par lot
 			// (ALGO_BATCH_UTIL)
 #define KS_VERSION 11   // 2014-02-12 Ajout de variantes sur le batch
+#define KS_VERSION 12   // 2014-03-29 Lecture de plus de paramêtres
 			*/
-#define KS_VERSION 12   // 2014-03-39 Lecture de plus de paramêtres
+#define KS_VERSION 13   // 2014-04-10 Multiplexage de sources
 /*======================================================================*/
 
 #include <sys/types.h>
@@ -75,12 +76,27 @@
 #include <schedACMBatch.h>
 #include <sched_ks.h>
 #include <dvb-s2-ll.h>
+#include <muxdemux.h>    // V13
 
 // Utilisation de sondes exhaustives pour toutes les mesures (lourd !!)
 //#define USE_EXHAUSTIVE_PROBES
 
 // Affichage des résultats de chaque simulation
 #define AFFICHE_SIMU
+
+
+// Quel algorithme ?
+#define ALGO_KS           0
+#define ALGO_UTILITY_PROP 1    // Rendu caduque par le 4 avec une durée d'époque nulle
+#define ALGO_UTILITY      2
+#define ALGO_KS_EXHAUSTIF 3
+#define ALGO_UTIL_PROP_BATCH 4
+#define ALGO_BATCH_UTIL      5
+#define ALGO_BATCH_LENGTH    6
+#define ALGO_BATCH_UTIL_LENGTH      7
+#define ALGO_BATCH_DURATION         8
+#define ALGO_BATCH_UTIL_DURATION    9
+#define ALGO_BATCH_DURATION_LENGTH         10
 
 /*
  * Structure permettant de définir la modification des
@@ -230,6 +246,9 @@ void scheduleChangementComportement(double date, struct dateGenerator_t * dateGe
 /************************************************************************
           FONCTIONS DE LECTURE
  ************************************************************************/
+/*
+ * Lecture des caratéristiques des MODCODs
+ */
 void lireMODCODFromFILE(FILE * f)
 {
    int mc;
@@ -281,6 +300,7 @@ void lireMODCODFromFILE(FILE * f)
       }
    }
 }
+
 
 void lireParametres()
 {
@@ -414,11 +434,19 @@ void initParametres()
 /*----------------------------------------------------------------------*/
 int main() {
    // Construction des sources
-   struct PDUSource_t       * sourcePDU[NB_MODCOD][NB_QOS_LEVEL];
-   struct dateGenerator_t   * dateGen[NB_MODCOD][NB_QOS_LEVEL];
-   struct randomGenerator_t * sizeGen[NB_MODCOD][NB_QOS_LEVEL];
+   // V13  : tableau ouvert pour multiplexer des souces
+   struct PDUSource_t       ** sourcePDU[NB_MODCOD][NB_QOS_LEVEL];
 
-   struct filePDU_t   * files[NB_MODCOD][NB_QOS_LEVEL];
+   // V13 : on multiplexe éventuellement des sources sur une file
+   struct muxDemuxSender_t     * sourceMuxer[NB_MODCOD][NB_QOS_LEVEL];
+   struct muxDemuxSenderSAP_t ** ssap[NB_MODCOD][NB_QOS_LEVEL];
+ 
+   //   struct dateGenerator_t    * dateGen[NB_MODCOD][NB_QOS_LEVEL];
+   struct randomGenerator_t  * sizeGen[NB_MODCOD][NB_QOS_LEVEL];
+
+   // Chaque file est associée à un MODCOD et une QoS
+   struct filePDU_t          * files[NB_MODCOD][NB_QOS_LEVEL];
+
 /*----------------------------------------------------------------------*/
 /*   La taille d'une file est exprimée en durée (en seconde) au débit de*/
 /* la source. O pour "no limit".                                        */
@@ -431,21 +459,27 @@ int main() {
    // La fin des BBFRAMEs
    struct PDUSink_t  * sink;
 
-   /* Les sondes */
+/*----------------------------------------------------------------------*/
+/*    Les sondes                                                        */
+/*----------------------------------------------------------------------*/
+   // Temps moyen de séjour dans la file
+   struct probe_t     * tms[NB_MODCOD][NB_QOS_LEVEL];
+
+   // V13 Temps moyen de séjour dans la file PAR SOURCE
+   struct probe_t     ** tmsSource[NB_MODCOD][NB_QOS_LEVEL];
+
+   // V13 Sondes sur les sources
+   struct probe_t    ** probeSource[NB_MODCOD][NB_QOS_LEVEL];
+
    struct probe_t     * sps[NB_MODCOD][NB_QOS_LEVEL]; // Tailles des paquets des sources
-   struct probe_t     * tms[NB_MODCOD][NB_QOS_LEVEL]; // Temps moyen de séjour dans la file
    struct probe_t     * sip; // Sink Input Probe
    struct probe_t     * bbfps[NB_MODCOD]; // BBFRAME payload size
    struct probe_t     * df; // Combien de DUMMY frames ?
    struct probe_t     * pqinmc[NB_MODCOD][NB_QOS_LEVEL][NB_MODCOD]; // Nombre de pq de (i, j) dans k
 
-   int dumpThroughput = 0;
    struct probe_t     * bwProbe[NB_MODCOD][NB_QOS_LEVEL]; // Le débit *estimé par le scheduler*
    struct probe_t     * actualBwProbe[NB_MODCOD][NB_QOS_LEVEL]; // Le débit "réel" (mesuré par une sonde a fenetre)
 
-   // Les deux suivantes sont pour le moment inutilisées car apparemment buggées ...
-   //   struct probe_t     * emaBwProbe[NB_MODCOD][NB_QOS_LEVEL]; // Le débit "réel" (mesuré par une sonde EMA)
-   //   struct probe_t     * periodicEmaBwProbe[NB_MODCOD][NB_QOS_LEVEL]; // Le débit "réel" (prélevé périodiquement sur la sonde EMA)
 
    // Les sondes permettant de faire des moyennes sur les simu
    struct probe_t     * nbPaquetsMoyen[NB_MODCOD][NB_QOS_LEVEL];
@@ -454,32 +488,26 @@ int main() {
 
    struct probe_t     * tmsGlobal; // Sonde sur le temps de service moyen global
 
-   int dumpDropProbe = 1;
    struct probe_t     * pertes[NB_MODCOD][NB_QOS_LEVEL];
 
    struct probe_t     * nbCas; // Une sonde sur le nombre de cas testés
 
-   // Quel algorithme ?
-#define ALGO_KS           0
-#define ALGO_UTILITY_PROP 1    // Rendu caduque par le 4 avec une durée d'époque nulle
-#define ALGO_UTILITY      2
-#define ALGO_KS_EXHAUSTIF 3
-#define ALGO_UTIL_PROP_BATCH 4
-#define ALGO_BATCH_UTIL      5
-#define ALGO_BATCH_LENGTH    6
-#define ALGO_BATCH_UTIL_LENGTH      7
-#define ALGO_BATCH_DURATION         8
-#define ALGO_BATCH_UTIL_DURATION    9
-#define ALGO_BATCH_DURATION_LENGTH         10
+   // Les deux suivantes sont pour le moment inutilisées car
+   // apparemment buggées ... WARNING : à voir
+   // Le débit "réel" (mesuré par une sonde EMA)
+   //   struct probe_t     * emaBwProbe[NB_MODCOD][NB_QOS_LEVEL];
+   // Le débit "réel" (prélevé périodiquement sur la sonde EMA)
+   //   struct probe_t     * periodicEmaBwProbe[NB_MODCOD][NB_QOS_LEVEL]; 
 
+   int dumpThroughput = 0;
+   int dumpDropProbe = 1;
+
+   // Quel algorithme doit on utiliser ?
    int algorithme ;
 
    // Fait-on du déclassement ?
    char declString[32];
    int declassement;
-
-   int mc;
-   int q, m;
 
    int ns;
    char name[64];
@@ -490,6 +518,9 @@ int main() {
    /* Sortie des résultats */
    char filename[512], dataFilename[512], gnuplotFilename[512], logFilename[512];
    FILE * fichierData, * fichierGnuplot, * fichierLog;
+
+   // Fichier dans lequel on sort le résultat multisources
+   FILE * fichierSources;
 
    // Fichier de débit
    int fdDebit;
@@ -508,17 +539,36 @@ int main() {
    int sequenceMaxLength = 1;
    struct probe_t * epochDurationProbe = NULL;
 
+   // V13 On peut multiplexer des sources sur une file
+   int nbSources[NB_MODCOD][NB_QOS_LEVEL];
+
+   // Les compteurs de boucles
+   int mc;
+   int q, m;
+   int nbSrc; // Pour boucler sur les sources
+
+/*----------------------------------------------------------------------*/
+/*   Initialisation des valeurs par défaut des paramètres.              */
+/*----------------------------------------------------------------------*/
+   // A priori pas de multiplexage
+   for (m = 0; m < NB_MODCOD; m++) {
+      for (q = 0; q < NB_QOS_LEVEL; q++) {
+         nbSources[m][q] = 1;
+      }
+   }
+
+   printf("Knapsack version %d", KS_VERSION);
+#if defined(TEST_METEO)
+   printf("-meteo\n");
+#elif defined(TEST_METEO_REF)
+   printf("-meteo-ref\n");
+#else
+   printf("-vanilla\n");
+#endif
+
 /*----------------------------------------------------------------------*/
 /*   Saisie des paramètres.                                             */
 /*----------------------------------------------------------------------*/
-
-/* Liste des paramètes à initialiser
-
-   dureeSimulation
-   chargeEntree
-
- */
-
    printf("Duree de la simulation (en secondes) = ");
    fflush(stdout);
    scanf("%lf", &dureeSimulation);
@@ -640,15 +690,28 @@ int main() {
    printf("Capacite de chaque file (en secondes) = ");
    fflush(stdout);
    scanf("%lf", &fileDuration);
+
+      // V13 : Lecture des éventuels nombres de sources
+      scanf("%d\n", &m);
+      while (m >= 0) {
+         scanf("%d\n", &q);
+         scanf("%d\n", &nbSources[m][q]);
+         scanf("%d\n", &m);
+      }
    } // if dureeSimulation < 0 
 
-   // Ouverture des fichiers
+/*----------------------------------------------------------------------*/
+/*   Ouverture des fichiers                                             */
+/*----------------------------------------------------------------------*/
    printf("Ouverture des fichiers de log ...\n");
+
    sprintf(dataFilename, "%s.data", filename);
-   sprintf(gnuplotFilename, "%s.gnu", filename);
-   sprintf(logFilename, "%s.log", filename);
    fichierData = fopen(dataFilename, "w");
+
+   sprintf(gnuplotFilename, "%s.gnu", filename);
    fichierGnuplot = fopen(gnuplotFilename, "w");
+
+   sprintf(logFilename, "%s.log", filename);
    fichierLog = fopen(logFilename, "w");
 
 /*----------------------------------------------------------------------*/
@@ -827,16 +890,56 @@ int main() {
 
 	 filePDU_addDropSizeProbe(files[m][q], pertes[m][q]);
 
-         // Le générateur de date de production
-         dateGen[m][q] = dateGenerator_createExp(lambda[m][q]);
-
-         // Création de la source 
-         sourcePDU[m][q] = PDUSource_create(dateGen[m][q],
-					    files[m][q],
+         // Création de la source ou des sources.
+         // V13 : ajout du multiplexage de plusieurs sources
+	 if (nbSources[m][q] == 1) {
+            // Le générateur de date de production est créé à la volée
+	    sourcePDU[m][q] = (struct PDUSource_t **)malloc(sizeof(struct PDUSource_t *));
+            sourcePDU[m][q][0] = PDUSource_create(dateGenerator_createExp(lambda[m][q]),
+   					    files[m][q],
 					    (processPDU_t)filePDU_processPDU);
-         PDUSource_setPDUSizeGenerator(sourcePDU[m][q],  sizeGen[m][q]); 
+            PDUSource_setPDUSizeGenerator(sourcePDU[m][q][0],  sizeGen[m][q]); 
 
-         // Ajout des sondes
+            // Ajout d'une probe sur ce que crée la source
+            probeSource[m][q] = (struct Probe_t **)malloc(sizeof(struct Probe_t *));
+	    probeSource[m][q][0] = probe_createMean();
+            PDUSource_addPDUGenerationSizeProbe(sourcePDU[m][q][0], probeSource[m][q][0]); 
+	 } else {
+            // Si nbSources[m][q] > 1, alors le traffic est équitablement
+            // produit par autant de sources, qui sont multiplexées dans
+            // la file commune.
+	    sourcePDU[m][q] = (struct PDUSource_t **)malloc(nbSources[m][q] * sizeof(struct PDUSource_t *));
+
+            // Création du  multiplexeur avec la file en sortie
+	    sourceMuxer[m][q] = muxDemuxSender_create(files[m][q],
+					    (processPDU_t)filePDU_processPDU);
+
+            // Création du tableau de SSAP
+	    ssap[m][q] = (struct muxDemuxSenderSAP_t **)malloc(nbSources[m][q] * sizeof(struct muxDemuxSenderSAP_t *));
+
+            probeSource[m][q] = (struct Probe_t **)malloc(sizeof(struct Probe_t *));
+
+            // Création des sources avec le multiplexeur en sortie
+   	    for (nbSrc = 0 ; nbSrc < nbSources[m][q] ; nbSrc++) {
+               // Création du point d'accès au service
+               ssap[m][q][nbSrc] = muxDemuxSender_createNewSAP(sourceMuxer[m][q], nbSrc+1);
+
+               sourcePDU[m][q][nbSrc] = PDUSource_create(dateGenerator_createExp(lambda[m][q]/(double)nbSources[m][q]),
+							 ssap[m][q][nbSrc], muxDemuxSender_processPDU);
+               // Même générateur de taille pour toutes les sources
+               // WARNING : bricolage !
+               PDUSource_setPDUSizeGenerator(sourcePDU[m][q][nbSrc], sizeGen[m][q]); 
+
+               // Ajout d'une probe sur ce que crée la source
+               probeSource[m][q][nbSrc] = probe_createMean();
+	       PDUSource_addPDUGenerationSizeProbe(sourcePDU[m][q][nbSrc], probeSource[m][q][nbSrc]); 
+	    }
+	 };
+
+/*----------------------------------------------------------------------*/
+/*    Ajout des sondes                                                  */
+/*----------------------------------------------------------------------*/
+         // Sonde sur la taille des paquets produits
 #ifdef USE_EXHAUSTIVE_PROBES
 	 sps[m][q] = probe_createExhaustive();
 #else
@@ -844,7 +947,11 @@ int main() {
 #endif
 	 sprintf(name, "sps[%d][%d]", m, q);
 	 probe_setName( sps[m][q], name);
-         PDUSource_addPDUGenerationSizeProbe(sourcePDU[m][q], sps[m][q]);
+
+         // V13 : On ne place cette sonde que sur la première source
+         // en cas de multiplexage
+         // WARNING  : on pourrait en mettre une par file
+         PDUSource_addPDUGenerationSizeProbe(sourcePDU[m][q][0], sps[m][q]);
 
 #ifdef USE_EXHAUSTIVE_PROBES
 	 tms[m][q] = probe_createExhaustive();
@@ -856,8 +963,36 @@ int main() {
          filePDU_addSejournProbe(files[m][q], tms[m][q]);
 	 probe_addSampleProbe(tms[m][q], tmsGlobal);
 
+         // V13 : en cas de multiplexage, on ajoute des sondes
+         // spécifiques via des filtres
+	 if (nbSources[m][q] > 1) {
+            tmsSource[m][q] = (struct probe_t **)malloc(nbSources[m][q]*sizeof(struct probe_t *));
+   	    for (nbSrc = 0 ; nbSrc < nbSources[m][q] ; nbSrc++) {
+               // On crée la sonde
+               tmsSource[m][q][nbSrc] = 
+#ifdef USE_EXHAUSTIVE_PROBES
+                            probe_createExhaustive();
+#else
+	                    probe_createTimeSliceAverage(200.0*nbSources[m][q]/lambda[m][q]);
+#endif
+               // On la dote d'un filtre
+               probe_setFilter(tmsSource[m][q][nbSrc],
+                               muxDemuxSender_createFilterFromSAP(ssap[m][q][nbSrc]));
+	       // On la nomme
+	       sprintf(name, "tmsSource[%d][%d][%d]", m, q, nbSrc);
+               probe_setName(tmsSource[m][q][nbSrc], name);
+
+               // On l'ajoute à la file
+               filePDU_addSejournProbe(files[m][q], tmsSource[m][q][nbSrc]);
+	    }
+	 }
+
          // On démarre la source
-         PDUSource_start(sourcePDU[m][q]);
+         // V13 : On en a éventuellement plusieurs à démarrer
+ 	 for (nbSrc = 0 ; nbSrc < nbSources[m][q] ; nbSrc++) {
+            PDUSource_start(sourcePDU[m][q][nbSrc]);
+	 }
+       
 
          // Les sondes pour les moyennes inter-simu
 	 tmsMoyen[m][q] = probe_createExhaustive();
@@ -979,7 +1114,7 @@ int main() {
          fprintf(fichierLog, "   %7.1f   |", taillePaquet[m][q]);
          fprintf(fichierLog, " %7.3f Mbit/s |", lambda[m][q]*8.0*taillePaquet[m][q]/1000000.0);
          fprintf(fichierLog, "  %9lu B  |", filePDU_getMaxSize(files[m][q]));
-         fprintf(fichierLog, "\n");
+         fprintf(fichierLog, "  (%d)\n", nbSources[m][q]); // V13
 	 debit += lambda[m][q]*8.0*taillePaquet[m][q]/1000000.0;
       }
       fprintf(fichierLog, ".........+.............+.............+................+...............+\n");
@@ -997,8 +1132,13 @@ int main() {
 #endif
 
 #ifdef TEST_INCIVISME   // On le fera sur le scenario 3 (1MC)
-   scheduleChangementComportement(0.4*dureeSimulation, dateGen[3][0], lambda[3][0]*1.5);
-   scheduleChangementComportement(0.6*dureeSimulation, dateGen[3][0], lambda[3][0]);
+Attention verifier que nbSources == 1
+   scheduleChangementComportement(0.4*dureeSimulation,
+				  PDUSource_getDateGenerator(sourcePDU[3][0][0]),
+				  lambda[3][0]*1.5);
+   scheduleChangementComportement(0.6*dureeSimulation,
+				  PDUSource_getDateGenerator(sourcePDU[3][0][0]),
+				  lambda[3][0]);
 #endif
 
 
@@ -1034,8 +1174,10 @@ int main() {
          nbPqTotal = 0;
          for (q = 0; q < NB_QOS_LEVEL; q++) {
             fprintf(fichierLog, "   %d/%d   |", m, q);
-            fprintf(fichierLog, " %9ld |", probe_nbSamples(sps[m][q]));
-	    nbPqTotal += probe_nbSamples(sps[m][q]);
+            fprintf(fichierLog, " %9ld |", probe_nbSamples(tms[m][q])); // V13
+	    //            fprintf(fichierLog, " %9ld |", probe_nbSamples(sps[m][q]));
+	    nbPqTotal += probe_nbSamples(tms[m][q]);// V13
+	    //	    nbPqTotal += probe_nbSamples(sps[m][q]);
             fprintf(fichierLog, "          |");
             if (probe_nbSamples(sps[m][q])) {
 	       fprintf(fichierLog, "  %7.1f |", probe_mean(sps[m][q]));
@@ -1268,14 +1410,28 @@ int main() {
       for (m = 0; m < NB_MODCOD; m++) {
          for (q = 0; q < NB_QOS_LEVEL; q++) {
             if (probe_nbSamples(tms[m][q])) { 
-	    max = (max > probe_mean(tms[m][q]))? max : probe_mean(tms[m][q]);
-            fprintf(fichierData, "%d M%d/Q%d %f %f\n", 4*m+q+1, m+1, q+1, probe_mean(tms[m][q]), probe_demiIntervalleConfiance5pc(tms[m][q]));
+	       max = (max > probe_mean(tms[m][q]))? max : probe_mean(tms[m][q]);
+               fprintf(fichierData, "%d M%d/Q%d %f %f\n", 4*m+q+1, m+1, q+1, probe_mean(tms[m][q]), probe_demiIntervalleConfiance5pc(tms[m][q]));
 	    } else {
                fprintf(fichierData, "%d M%d/Q%d %f %f\n", 4*m+q+1, m+1, q+1, 0.0, 0.0);
             }
-         }
+            // V13 : pour les sources multiples, on crée un fichier
+            // spécial
+	    printf("%d/%d : %d ", m, q, probe_nbSamples(tms[m][q]));
+            if (nbSources[m][q] > 1) {
+               sprintf(dataFilename, "%s-%d_%d.data", filename, m, q);
+               fichierSources =  fopen(dataFilename, "w");
+	       for (nbSrc = 0 ; nbSrc < nbSources[m][q]; nbSrc++) {
+   	          printf(" %d ", probe_nbSamples(tmsSource[m][q][nbSrc]));
+		  fprintf(fichierSources, "%d %f %f\n", nbSrc, probe_mean(tmsSource[m][q][nbSrc]), probe_demiIntervalleConfiance5pc(tmsSource[m][q][nbSrc]));
+	       }
+	       fclose(fichierSources);
+	    }
+            printf("\n");
+	 }
       }
 
+      // Génération du petit script gnuplot pour représenter le TMS
       fprintf(fichierGnuplot, "set terminal postscript color dashed\n");
       fprintf(fichierGnuplot, "set output '%s.eps'\n", filename);
       fprintf(fichierGnuplot, "set xrange [0:16]\n");
@@ -1308,6 +1464,22 @@ int main() {
             probe_sample(bbfpsMoyen[m], probe_mean(bbfps[m]));
 	 }
       }
+
+      // V13 Quelques tests, ...
+      for (m = 0; m < NB_MODCOD; m++) {
+         for (q = 0; q < NB_QOS_LEVEL; q++) {
+	    if (nbSources[m][q] == 1) {
+	      printf("[%d/%d] Nb %d, size %f \n", m, q, probe_nbSamples(probeSource[m][q][0]), probe_mean(probeSource[m][q][0]));
+	    } else {
+	      printf("[%d/%d] ", m, q);
+	      for (nbSrc = 0; nbSrc < nbSources[m][q] ; nbSrc++) {
+		printf(" Nb %d, size %f ", probe_nbSamples(probeSource[m][q][nbSrc]), probe_mean(probeSource[m][q][nbSrc]));
+	      }
+	      printf("\n");
+	    }
+	 }
+      }
+
 
       // Et on ré-initalise pour une nouvelle tournée !
       motSim_reset();
