@@ -481,16 +481,24 @@ int main() {
    struct probe_t     * actualBwProbe[NB_MODCOD][NB_QOS_LEVEL]; // Le débit "réel" (mesuré par une sonde a fenetre)
 
 
-   // Les sondes permettant de faire des moyennes sur les simu
-   struct probe_t     * nbPaquetsMoyen[NB_MODCOD][NB_QOS_LEVEL];
-   struct probe_t     * bbfpsMoyen[NB_MODCOD]; // BBFRAME payload size
-   struct probe_t     * tmsMoyen[NB_MODCOD][NB_QOS_LEVEL];
-
+   // Les deux sondes suivantes permettent d'obtenir des valeurs
+   // globales à l'échelle du système. La première est utilisée pour
+   // calculer une valeur moyenne, elle sera donc attachée à chaque
+   // file afin de pondérer correctement. La seconde est utilisée à la
+   // fin pour calculer un coefficient de variation entre les moyennes
+   // obtenues sur chaque file.
    struct probe_t     * tmsGlobal; // Sonde sur le temps de service moyen global
+   struct probe_t     * tmsMoyen;  // Sonde sur les temps de service moyens
 
    struct probe_t     * pertes[NB_MODCOD][NB_QOS_LEVEL];
 
    struct probe_t     * nbCas; // Une sonde sur le nombre de cas testés
+
+   // Les sondes permettant de faire des moyennes sur les simu
+   struct probe_t     * nbPaquetsMoyen[NB_MODCOD][NB_QOS_LEVEL];
+   struct probe_t     * bbfpsMoyen[NB_MODCOD]; // BBFRAME payload size
+   struct probe_t     * campagneTmsMoyen[NB_MODCOD][NB_QOS_LEVEL];
+
 
    // Les deux suivantes sont pour le moment inutilisées car
    // apparemment buggées ... WARNING : à voir
@@ -901,7 +909,7 @@ int main() {
             PDUSource_setPDUSizeGenerator(sourcePDU[m][q][0],  sizeGen[m][q]); 
 
             // Ajout d'une probe sur ce que crée la source
-            probeSource[m][q] = (struct Probe_t **)malloc(sizeof(struct Probe_t *));
+            probeSource[m][q] = (struct probe_t **)malloc(sizeof(struct probe_t *));
 	    probeSource[m][q][0] = probe_createMean();
             PDUSource_addPDUGenerationSizeProbe(sourcePDU[m][q][0], probeSource[m][q][0]); 
 	 } else {
@@ -917,7 +925,7 @@ int main() {
             // Création du tableau de SSAP
 	    ssap[m][q] = (struct muxDemuxSenderSAP_t **)malloc(nbSources[m][q] * sizeof(struct muxDemuxSenderSAP_t *));
 
-            probeSource[m][q] = (struct Probe_t **)malloc(sizeof(struct Probe_t *));
+            probeSource[m][q] = (struct probe_t **)malloc(nbSources[m][q] * sizeof(struct probe_t *));
 
             // Création des sources avec le multiplexeur en sortie
    	    for (nbSrc = 0 ; nbSrc < nbSources[m][q] ; nbSrc++) {
@@ -926,6 +934,8 @@ int main() {
 
                sourcePDU[m][q][nbSrc] = PDUSource_create(dateGenerator_createExp(lambda[m][q]/(double)nbSources[m][q]),
 							 ssap[m][q][nbSrc], muxDemuxSender_processPDU);
+	       sprintf(name, "sourcePDU[%d][%d][%d]", m, q, nbSrc);
+	       PDUSource_setName(sourcePDU[m][q][nbSrc], name);
                // Même générateur de taille pour toutes les sources
                // WARNING : bricolage !
                PDUSource_setPDUSizeGenerator(sourcePDU[m][q][nbSrc], sizeGen[m][q]); 
@@ -961,7 +971,10 @@ int main() {
 	 sprintf(name, "tms[%d][%d]", m, q);
 	 probe_setName(tms[m][q], name);
          filePDU_addSejournProbe(files[m][q], tms[m][q]);
-	 probe_addSampleProbe(tms[m][q], tmsGlobal);
+	 probe_addSampleProbe(tms[m][q], tmsGlobal);    // WARNING
+							// pourquoi
+							// une méta
+							// sonde ?
 
          // V13 : en cas de multiplexage, on ajoute des sondes
          // spécifiques via des filtres
@@ -995,10 +1008,10 @@ int main() {
        
 
          // Les sondes pour les moyennes inter-simu
-	 tmsMoyen[m][q] = probe_createExhaustive();
-	 sprintf(name, "tmsMoyen[%d][%d]", m, q);
-	 probe_setName(tmsMoyen[m][q], name);
-         probe_setPersistent(tmsMoyen[m][q]);
+	 campagneTmsMoyen[m][q] = probe_createExhaustive();
+	 sprintf(name, "campagneTmsMoyen[%d][%d]", m, q);
+	 probe_setName(campagneTmsMoyen[m][q], name);
+         probe_setPersistent(campagneTmsMoyen[m][q]);
 
 	 nbPaquetsMoyen[m][q] = probe_createExhaustive();
 	 sprintf(name, "nbPaquetsMoyen[%d][%d]", m, q);
@@ -1226,6 +1239,7 @@ Attention verifier que nbSources == 1
          }
          fprintf(fichierLog, "---------+-----------+----------+----------+----------+------------+----------+----------+\n");
       }
+      // Valeurs moyennes
       fprintf(fichierLog, "   */*   |");
       fprintf(fichierLog, "           |");
       fprintf(fichierLog, "          |");
@@ -1240,6 +1254,31 @@ Attention verifier que nbSources == 1
       fprintf(fichierLog, "          |");
       fprintf(fichierLog, "          |");
       fprintf(fichierLog, "+/- %5.1e |", probe_demiIntervalleConfiance5pc(tmsGlobal));
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |\n");
+      fprintf(fichierLog, "---------+-----------+----------+----------+----------+------------+----------+----------+\n");
+
+      tmsMoyen = probe_createExhaustive();
+      for (m = 0; m < NB_MODCOD; m++) {
+         for (q = 0; q < NB_QOS_LEVEL; q++) {
+	   probe_sample(tmsMoyen, probe_mean(tms[m][q]));
+	 }
+      }
+      // Equité via le coefficient de variation
+      fprintf(fichierLog, " C. Var. |");
+      fprintf(fichierLog, "           |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "   %7.2e |", probe_coefficientOfVariation(tmsMoyen));
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |\n");
+      fprintf(fichierLog, "         |");
+      fprintf(fichierLog, "           |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "          |");
+      fprintf(fichierLog, "            |");
       fprintf(fichierLog, "          |");
       fprintf(fichierLog, "          |\n");
       fprintf(fichierLog, "---------+-----------+----------+----------+----------+------------+----------+----------+\n");
@@ -1417,17 +1456,20 @@ Attention verifier que nbSources == 1
             }
             // V13 : pour les sources multiples, on crée un fichier
             // spécial
-	    printf("%d/%d : %d ", m, q, probe_nbSamples(tms[m][q]));
+	    //	    printf("%d/%d : %d ", m, q, probe_nbSamples(tms[m][q]));
             if (nbSources[m][q] > 1) {
                sprintf(dataFilename, "%s-%d_%d.data", filename, m, q);
                fichierSources =  fopen(dataFilename, "w");
 	       for (nbSrc = 0 ; nbSrc < nbSources[m][q]; nbSrc++) {
-   	          printf(" %d ", probe_nbSamples(tmsSource[m][q][nbSrc]));
-		  fprintf(fichierSources, "%d %f %f\n", nbSrc, probe_mean(tmsSource[m][q][nbSrc]), probe_demiIntervalleConfiance5pc(tmsSource[m][q][nbSrc]));
+		 //   	          printf(" %d ", probe_nbSamples(tmsSource[m][q][nbSrc]));
+		  fprintf(fichierSources, "%d %f %f\n",
+			  nbSrc,
+			  probe_mean(tmsSource[m][q][nbSrc]),
+			  probe_demiIntervalleConfiance5pc(tmsSource[m][q][nbSrc]));
 	       }
 	       fclose(fichierSources);
 	    }
-            printf("\n");
+	    //            printf("\n");
 	 }
       }
 
@@ -1454,7 +1496,7 @@ Attention verifier que nbSources == 1
       for (m = 0; m < NB_MODCOD; m++) {
          for (q = 0; q < NB_QOS_LEVEL; q++) {
             if (probe_nbSamples(tms[m][q])) { 
-               probe_sample(tmsMoyen[m][q], probe_mean(tms[m][q]));
+               probe_sample(campagneTmsMoyen[m][q], probe_mean(tms[m][q]));
 	    };
             if (probe_nbSamples(sps[m][q])) { 
                probe_sample(nbPaquetsMoyen[m][q], probe_nbSamples(sps[m][q]));
@@ -1465,29 +1507,35 @@ Attention verifier que nbSources == 1
 	 }
       }
 
+      /*
       // V13 Quelques tests, ...
       for (m = 0; m < NB_MODCOD; m++) {
          for (q = 0; q < NB_QOS_LEVEL; q++) {
 	    if (nbSources[m][q] == 1) {
-	      printf("[%d/%d] Nb %d, size %f \n", m, q, probe_nbSamples(probeSource[m][q][0]), probe_mean(probeSource[m][q][0]));
+               printf("[%d/%d] Nb %d, size %f \n",
+		     m, q,
+		     probe_nbSamples(probeSource[m][q][0]),
+		     probe_mean(probeSource[m][q][0]));
 	    } else {
-	      printf("[%d/%d] ", m, q);
+	      printf("[%d/%d] \n", m, q);
 	      for (nbSrc = 0; nbSrc < nbSources[m][q] ; nbSrc++) {
-		printf(" Nb %d, size %f ", probe_nbSamples(probeSource[m][q][nbSrc]), probe_mean(probeSource[m][q][nbSrc]));
+		printf("    . Nb %d, size %f\n",
+		       probe_nbSamples(probeSource[m][q][nbSrc]),
+		       probe_mean(probeSource[m][q][nbSrc]));
 	      }
 	      printf("\n");
 	    }
 	 }
       }
-
+      */
 
       // Et on ré-initalise pour une nouvelle tournée !
       motSim_reset();
    }
 
-   if (probe_nbSamples(tmsMoyen[0][0]) > 1) {
+   if (probe_nbSamples(campagneTmsMoyen[0][0]) > 1) {
       printf("\n\nFin de campagne\n");
-      printf("Sur %ld simulations :\n", probe_nbSamples(tmsMoyen[0][0]));
+      printf("Sur %ld simulations :\n", probe_nbSamples(campagneTmsMoyen[0][0]));
 
 
       printf(" - Nombre de BBFRAME produites : --");
@@ -1503,7 +1551,7 @@ Attention verifier que nbSources == 1
             printf("          |");
             printf("          |");
             printf("          |");
-            printf(" %7.2e    |", probe_mean(tmsMoyen[m][q]));
+            printf(" %7.2e    |", probe_mean(campagneTmsMoyen[m][q]));
 
             printf("          |");
             printf("          |\n");
@@ -1513,7 +1561,7 @@ Attention verifier que nbSources == 1
             printf("          |");
             printf("          |");
             printf("          |");
-            printf("+/- %7.2e |", probe_demiIntervalleConfiance5pc(tmsMoyen[m][q]));
+            printf("+/- %7.2e |", probe_demiIntervalleConfiance5pc(campagneTmsMoyen[m][q]));
 
             printf("          |");
             printf("          |\n");
