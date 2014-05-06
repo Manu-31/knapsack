@@ -50,8 +50,9 @@
 			// (ALGO_BATCH_UTIL)
 #define KS_VERSION 11   // 2014-02-12 Ajout de variantes sur le batch
 #define KS_VERSION 12   // 2014-03-29 Lecture de plus de paramêtres
-			*/
 #define KS_VERSION 13   // 2014-04-10 Multiplexage de sources
+			*/
+#define KS_VERSION 14   // Petite modif d'affichage
 /*======================================================================*/
 
 #include <sys/types.h>
@@ -549,11 +550,15 @@ int main() {
 
    // V13 On peut multiplexer des sources sur une file
    int nbSources[NB_MODCOD][NB_QOS_LEVEL];
+   // V13 En cas de multiplexage de sources, chacune aura un lambda
+   // pondéré par  le coefficient suivant (normalisé)
+   double * coeffMultiSource[NB_MODCOD][NB_QOS_LEVEL];
 
    // Les compteurs de boucles
    int mc;
    int q, m;
    int nbSrc; // Pour boucler sur les sources
+   double d;
 
 /*----------------------------------------------------------------------*/
 /*   Initialisation des valeurs par défaut des paramètres.              */
@@ -703,7 +708,42 @@ int main() {
       scanf("%d\n", &m);
       while (m >= 0) {
          scanf("%d\n", &q);
+         // Combien de sources sur (m, q) ?
          scanf("%d\n", &nbSources[m][q]);
+
+         // A priori toutes les sources ont la même pondération
+	 coeffMultiSource[m][q] = (double *)malloc(nbSources[m][q] * sizeof(double));
+         for (nbSrc = 0; nbSrc < nbSources[m][q]; nbSrc++) {
+            coeffMultiSource[m][q][nbSrc] = 1.0;
+	 }
+         // On lit ensuite les poids des premières sources (le dernier
+         // est à 0.0, les suivantes seront à 1.0)
+         nbSrc = 0;
+	 // 	 printf("\nLecure des %d sources de %d/%d\n", nbSources[m][q], m, q);
+         scanf("%lf\n", &d);
+	 //printf("\nLu %f\n", d);
+         while (d != 0.0) {
+            coeffMultiSource[m][q][nbSrc] = d;
+	    nbSrc++;
+            if (nbSrc >= nbSources[m][q]) {
+	       printf("Erreur, trop de coefficients\n");
+               exit(1);
+	    }
+            scanf("%lf\n", &d);
+	    //printf("\nLu %f\n", d);
+	 }
+         // On normalise
+         d = 0;
+	 for (nbSrc = 0; nbSrc < nbSources[m][q]; nbSrc++) {
+	   //printf("%d -> %f\n", nbSrc, coeffMultiSource[m][q][nbSrc]);
+            d += coeffMultiSource[m][q][nbSrc];
+	 }
+	 for (nbSrc = 0; nbSrc < nbSources[m][q]; nbSrc++) {
+	   coeffMultiSource[m][q][nbSrc] = coeffMultiSource[m][q][nbSrc] / d;
+	   //printf("%d norm -> %f\n", nbSrc, coeffMultiSource[m][q][nbSrc]);
+	 }
+
+         // Lecture du prochain mux
          scanf("%d\n", &m);
       }
    } // if dureeSimulation < 0 
@@ -932,7 +972,7 @@ int main() {
                // Création du point d'accès au service
                ssap[m][q][nbSrc] = muxDemuxSender_createNewSAP(sourceMuxer[m][q], nbSrc+1);
 
-               sourcePDU[m][q][nbSrc] = PDUSource_create(dateGenerator_createExp(lambda[m][q]/(double)nbSources[m][q]),
+               sourcePDU[m][q][nbSrc] = PDUSource_create(dateGenerator_createExp(lambda[m][q]*coeffMultiSource[m][q][nbSrc]),
 							 ssap[m][q][nbSrc], muxDemuxSender_processPDU);
 	       sprintf(name, "sourcePDU[%d][%d][%d]", m, q, nbSrc);
 	       PDUSource_setName(sourcePDU[m][q][nbSrc], name);
@@ -1261,7 +1301,9 @@ Attention verifier que nbSources == 1
       tmsMoyen = probe_createExhaustive();
       for (m = 0; m < NB_MODCOD; m++) {
          for (q = 0; q < NB_QOS_LEVEL; q++) {
-	   probe_sample(tmsMoyen, probe_mean(tms[m][q]));
+	   if (probe_nbSamples(tms[m][q]) != 0 ) {
+              probe_sample(tmsMoyen, probe_mean(tms[m][q]));
+	   }
 	 }
       }
       // Equité via le coefficient de variation

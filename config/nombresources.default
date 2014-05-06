@@ -1,2 +1,22 @@
+#   Il est possible de définir ici le nombre de sources associé à
+# chaque file. La valeur (vide) par défaut donne un système avec une
+# source par file.
+#   Chaque "ligne" de la variable NOMBRE_SOURCES définit le nombre de
+# sources d'une file donnée puis la liste des poids des premières
+# sources. Les sources dont le poids n'est pas donné ont
+# arbitrairement un poids de 1.0. La liste des poids est terminée par
+# un 0.0 non significatif :
+#
+#   mc qos nbSrc W1 W2 ... Wn 0.0
+#
+# Exemple
+#
+#   MODCOD 0, QoS 1, 5 files de poids 2 3 1 1 1
+#   MODCOD 1, QoS 2, 4 files de poids 1 2 3 4
+#
+#   NOMBRE_SOURCES=( \
+#      0 1 5 2.0 3.0 0.0 \
+#      1 2 4 1.0 2.0 3.0 4.0 \
+#   )
 NOMBRE_SOURCES=( \
 )

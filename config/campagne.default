@@ -18,7 +18,14 @@ echo Fichier $NOMBRE_SOURCES_FILE
 #   Valeur par défaut des parametres (permet d'alleger les config et
 # d'assurer une certaine compatibilité ascendante, ...)
 #--------------------------------------------------------------------
-# Quel algorithme ? 
+
+#   Valeurs de la charge 
+#exemples
+#   CHARGES=" 0.75 0.80 0.85"
+CHARGES="0.8"
+
+#   Quel algorithme ? 
+#
 # 0 : KnapSack
 # 1 : PropUtil
 # 2 : util
@@ -29,12 +36,18 @@ ALGO=0
 # Traitement par lots
 EPOCH_DURATION=0.016
 
-# Valeurs de la charge 
-CHARGES="0.8"
-
-#Types de QoS pour les files 1/2/3
-#(type 1 : log, 2 : lin, 3 : exp, 4 : exn, 5 : pq, 6 : bit, 7 : BB, 8 : LRPT)
-QoSSet=(2 2 2)
+#   Types de QoS pour les files 1/2/3, definie par une fonction
+# d'utilité.
+#
+# 1 : logarithme
+# 2 : lineaire
+# 3 : exponentielle
+# 4 : exponentielle normalisee
+# 5 : pq
+# 6 : bit
+# 7 : BB
+# 8 : LRPT
+QoSSet=(1 1 1)
 
 #Poids de la QoS
 WghtQoS=(1 1 1)
@@ -42,7 +55,11 @@ WghtQoS=(1 1 1)
 #Paramètre K de la QoS
 KSet=(1 1 1)
 
-#Les scenarios a simuler (0 : equil, 1 : clear, 2 : inverse, 3 : un MODCOD)
+#   Les scenarios a simuler
+# 0 : equil
+# 1 : clear sky
+# 2 : inverse
+# 3 : un MODCOD
 SCENARIOS="3"
 
 DECLASSEMENT="FALSE"

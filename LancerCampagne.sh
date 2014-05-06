@@ -39,6 +39,7 @@ echo Building simulator parameters
 
 echo Running simulations
 
+
 touch  ${LOG}
 echo "---------------------------------------------------------------------" >> ${LOG}
 echo ">>>> " `hostname` -- `date` : debut de $CAMPAIGN_NAME >> ${LOG}
@@ -139,16 +140,30 @@ $LOG_DROP
 $FILE_DURATION
 EOF_NDES
                      # La découpe ci dessous en MC/QO/NbSrc n'est pas vraiment nécessaire !           
-                     (for n in $(seq 0 $((${#NOMBRE_SOURCES[@]} / 3 - 1)))
-                     do
-                        m=$((3 * $n))
-                        MC=${NOMBRE_SOURCES[$m]}
-                        QO=${NOMBRE_SOURCES[$(($m + 1))]}
-                        nbSrc=${NOMBRE_SOURCES[$(($m + 2))]}
-                        echo $MC
-                        echo $QO 
-                        echo $nbSrc
-                     done
+                     (
+#--------------------------------------------------------------------
+#   Lecture d'une structure multisource
+#--------------------------------------------------------------------
+if [ ${#NOMBRE_SOURCES[@]} != 0 ] ; then
+   m=0
+   while [ \( ${NOMBRE_SOURCES[$m]} !=  0 \) -a \( ${NOMBRE_SOURCES[$m]} != 0.0 \) ] ; do
+      MC=${NOMBRE_SOURCES[$m]} 
+      m=$(($m + 1))
+      QO=${NOMBRE_SOURCES[$m]} 
+      m=$(($m + 1))
+      nbSrc=${NOMBRE_SOURCES[$m]} 
+      m=$(($m + 1))
+      echo $MC
+      echo $QO
+      echo $nbSrc
+      while [ \( ${NOMBRE_SOURCES[$m]} !=  0 \) -a \( ${NOMBRE_SOURCES[$m]} != 0.0 \) ] ; do
+         echo ${NOMBRE_SOURCES[$m]} 
+         m=$(($m + 1))
+      done
+      echo 0.0
+   done
+fi
+
                      echo -1) >> ${filename}.param
 	             cat ${filename}.param  |$NDES
                   fi
